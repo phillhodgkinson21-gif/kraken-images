@@ -69,7 +69,7 @@ def build_layers(headline_lines, kicker, index, tagline, fonts_dir, bb_logo):
     gap = int(cap * 0.09)
     lead = cap + gap
     block_h = lead * (len(lines) - 1) + cap
-    top_zone, bot_zone = 300, 1530
+    top_zone, bot_zone = 300, H - 390
     y0 = top_zone + (bot_zone - top_zone - block_h) // 2
 
     line_masks = []
@@ -104,22 +104,22 @@ def build_layers(headline_lines, kicker, index, tagline, fonts_dir, bb_logo):
     _spaced(d, (M, 160), '4X4 MUSIC FESTIVAL', m22, (255, 255, 255, 200), track=0.28)
     _spaced(d, (W - M, 160), kicker.upper(), m22, CYAN + (255,), track=0.28, anchor_right=True)
     if tagline:
-        ty = min(y0 + block_h + 56, 1580)
+        ty = min(y0 + block_h + 56, H - 340)
         _spaced(d, (M, ty), tagline.upper(), m20, (255, 255, 255, 190), track=0.24)
 
     bot = Image.new('RGBA', (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(bot)
-    d.line([(M, 1640), (W - M, 1640)], fill=(255, 255, 255, 60), width=1)
-    _spaced(d, (M, 1664), VENUE, m22, (255, 255, 255, 230), track=0.22)
-    _spaced(d, (M, 1702), DATE, _f(fonts_dir, big, 92), GOLD + (255,), track=0.02)
+    d.line([(M, H - 280), (W - M, H - 280)], fill=(255, 255, 255, 60), width=1)
+    _spaced(d, (M, H - 256), VENUE, m22, (255, 255, 255, 230), track=0.22)
+    _spaced(d, (M, H - 218), DATE, _f(fonts_dir, big, 92), GOLD + (255,), track=0.02)
     if bb_logo and os.path.exists(bb_logo):
         bb = Image.open(bb_logo).convert('RGBA')
         bw = 210
         bb = bb.resize((bw, int(bw * bb.height / bb.width)), Image.LANCZOS)
-        bot.alpha_composite(bb, (W - M - bw, 1700))
-    _spaced(d, (M, 1830), SITE, m20, (255, 255, 255, 150), track=0.3)
-    _cross(d, M, 1880 - 14)
-    _cross(d, W - M, 1880 - 14)
+        bot.alpha_composite(bb, (W - M - bw, H - 220))
+    _spaced(d, (M, H - 90), SITE, m20, (255, 255, 255, 150), track=0.3)
+    _cross(d, M, H - 54)
+    _cross(d, W - M, H - 54)
 
     def prem(img):
         a = np.asarray(img, dtype=np.float32) / 255.0
@@ -218,10 +218,17 @@ def _render(clip, out, line_masks, bounds, edge, top_rgb, top_a, bot_rgb, bot_a,
     return out
 
 
-def still(clip, out_png, at=6.0, **kw):
-    """Render one frame (for previews)."""
+def still(clip, out_png, at=6.0, size=None, **kw):
+    """Render one frame. size=(1080,1350) gives an Instagram 4:5 feed post."""
+    global W, H
     tmp = out_png + '.mp4'
-    render_reel(clip, tmp, duration=at + 0.1, **kw)
+    W0, H0 = W, H
+    if size:
+        W, H = size
+    try:
+        render_reel(clip, tmp, duration=at + 0.1, **kw)
+    finally:
+        W, H = W0, H0
     subprocess.run([kw.get('ffmpeg', 'ffmpeg'), '-loglevel', 'error', '-y', '-sseof', '-0.05', '-i', tmp,
                     '-frames:v', '1', out_png])
     os.remove(tmp)
