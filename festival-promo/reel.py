@@ -128,13 +128,32 @@ def build_layers(headline_lines, kicker, index, tagline, fonts_dir, bb_logo):
 
 
 def render_reel(clip, out, headline_lines, kicker, index=1, tagline='', ffmpeg='ffmpeg',
-                fonts_dir='.', bb_logo=None, start=0.0, duration=10.0):
+                fonts_dir='.', bb_logo=None, start=0.0, duration=10.0, scale=1.0, t0=0.0):
+    """scale<1 renders smaller (e.g. 2/3 -> 720x1280). t0 lets you render a later segment."""
+    global W, H
     line_masks, bounds, edge, (top_rgb, top_a), (bot_rgb, bot_a) = build_layers(
         headline_lines, kicker, index, tagline, fonts_dir, bb_logo)
+    W0, H0 = W, H
+    if scale != 1.0:
+        W, H = int(round(W0 * scale / 2) * 2), int(round(H0 * scale / 2) * 2)
+        rs = lambda a: np.asarray(Image.fromarray((np.clip(a, 0, 1) * 255).astype(np.uint8)).resize((W, H), Image.LANCZOS), dtype=np.float32) / 255.0
+        line_masks = [rs(m) for m in line_masks]
+        bounds = [(int(r0 * scale), int(r1 * scale)) for r0, r1 in bounds]
+        edge = rs(edge)
+        top_rgb = np.dstack([rs(top_rgb[..., c]) for c in range(3)]); top_a = rs(top_a[..., 0])[..., None]
+        bot_rgb = np.dstack([rs(bot_rgb[..., c]) for c in range(3)]); bot_a = rs(bot_a[..., 0])[..., None]
+    try:
+        return _render(clip, out, line_masks, bounds, edge, top_rgb, top_a, bot_rgb, bot_a,
+                       ffmpeg, start, duration, t0)
+    finally:
+        W, H = W0, H0
+
+
+def _render(clip, out, line_masks, bounds, edge, top_rgb, top_a, bot_rgb, bot_a, ffmpeg, start, duration, t0):
     n = int(duration * FPS)
 
     dec = subprocess.Popen(
-        [ffmpeg, '-loglevel', 'error', '-stream_loop', '-1', '-ss', str(start), '-i', clip,
+        [ffmpeg, '-loglevel', 'error', '-stream_loop', '-1', '-ss', str(start + t0), '-i', clip,
          '-t', str(duration), '-vf',
          'scale=%d:%d:force_original_aspect_ratio=increase:flags=lanczos,crop=%d:%d,fps=%d' % (W, H, W, H, FPS),
          '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], stdout=subprocess.PIPE)
@@ -145,7 +164,7 @@ def render_reel(clip, out, headline_lines, kicker, index=1, tagline='', ffmpeg='
          '-c:a', 'aac', '-b:a', '64k', '-movflags', '+faststart', out], stdin=subprocess.PIPE)
 
     rng = np.random.default_rng(7)
-    grain = [rng.normal(0, 3.2, (H, W, 1)).astype(np.float32) / 255.0 for _ in range(6)]
+    grain = [rng.normal(0, 3.2, (H, W, 1)).astype(np.float32) / 255.0 for _ in range(4)]
     tint = np.array([0.80, 0.93, 1.0], dtype=np.float32)
     ink = np.array(INK, dtype=np.float32) / 255.0
     cyan = np.array(CYAN, dtype=np.float32) / 255.0
@@ -161,9 +180,9 @@ def render_reel(clip, out, headline_lines, kicker, index=1, tagline='', ffmpeg='
         else:
             frame = np.frombuffer(raw, np.uint8).reshape(H, W, 3).astype(np.float32) / 255.0
             last = frame
-        t = k / FPS
+        t = t0 + k / FPS
         lum = (frame @ np.array([0.299, 0.587, 0.114], dtype=np.float32))[..., None]
-        plate = ink + (lum * tint) * 0.15 + grain[k % 6]
+        plate = ink + (lum * tint) * 0.15 + grain[k % 4]
         vivid = np.clip((frame - 0.5) * 1.12 + 0.52, 0, 1)
         vivid = np.clip(lum + (vivid - lum) * 1.25, 0, 1) ** 0.72
 
