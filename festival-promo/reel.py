@@ -62,12 +62,43 @@ def _logo_white(path, height):
     return mark.resize((max(1, int(mark.width * height / mark.height)), height), Image.LANCZOS)
 
 
+def _logo_chip(path, height, pad=0.16, radius=6):
+    """Sponsor logo in its ORIGINAL colours on its own background chip (trimmed, padded, rounded)."""
+    crop = Image.open(path).convert('RGB')
+    for _ in range(2):                     # trim outer margin; if the logo sits in its own box, trim to inside it
+        a = np.asarray(crop, dtype=np.float32) / 255.0
+        bg = a[:3, :3].reshape(-1, 3).mean(axis=0)
+        ys, xs = np.where(np.abs(a - bg).max(axis=2) > 0.12)
+        if len(xs) == 0:
+            break
+        crop = crop.crop((xs.min(), ys.min(), xs.max() + 1, ys.max() + 1))
+        a2_ = np.asarray(crop, dtype=np.float32) / 255.0
+        if np.abs(a2_[:3, :3].reshape(-1, 3).mean(axis=0) - bg).max() < 0.2:
+            break                          # no inner box: done
+    a = np.asarray(crop, dtype=np.float32) / 255.0
+    edge = np.concatenate([a[0], a[-1], a[:, 0], a[:, -1]])
+    bg = np.median(edge, axis=0)
+    inner_h = int(height * (1 - 2 * pad))
+    crop = crop.resize((max(1, int(crop.width * inner_h / crop.height)), inner_h), Image.LANCZOS)
+    p = int(height * pad)
+    chip = Image.new('RGBA', (crop.width + 2 * p + 4, height), tuple(int(c * 255) for c in bg) + (255,))
+    chip.paste(crop, (p + 2, p))
+    mask = Image.new('L', chip.size, 0)
+    ImageDraw.Draw(mask).rounded_rectangle([0, 0, chip.width - 1, chip.height - 1], radius=radius, fill=255)
+    chip.putalpha(mask)
+    return chip
+
+
 def _ease(t):
     t = min(max(t, 0.0), 1.0)
     return 1 - (1 - t) ** 3
 
 
-def build_layers(headline_lines, kicker, index, tagline, fonts_dir, bb_logo, reveal_label='', sponsors=None, ke_logo=None):
+KE_BOX = []
+
+
+def build_layers(headline_lines, kicker, index, tagline, fonts_dir, bb_logo, reveal_label='', sponsors=None, ke_logo=None, static_logo=False):
+    KE_BOX[:] = []
     big = 'BigShoulders-Bold.ttf'
     cut = 'Anton-Regular.ttf'
     mono = 'DMMono-Regular.ttf'
@@ -147,22 +178,29 @@ def build_layers(headline_lines, kicker, index, tagline, fonts_dir, bb_logo, rev
         bb = bb.resize((int(bh * bb.width / bb.height), bh), Image.LANCZOS)
         bx -= bb.width
         bot.alpha_composite(bb, (bx, H - 232))
-        ke_path = ke_logo or os.path.join(os.path.dirname(bb_logo), 'kraken-expeditions-logo.jpg')
-        if os.path.exists(ke_path):
-            ke = Image.open(ke_path).convert('RGBA')
-            ke = ke.resize((int(bh * ke.width / ke.height), bh), Image.LANCZOS)
-            bx -= ke.width + 12
-            bot.alpha_composite(ke, (bx, H - 232))
+        pool = os.path.dirname(bb_logo)
+        kh = 100                                            # Kraken Expeditions logo, a touch taller than the BB badge
+        anim = os.path.join(pool, 'kraken-logo-pulse.mp4')
+        still_png = ke_logo or os.path.join(pool, 'kraken-logo.png')
+        if os.path.exists(anim) and not static_logo:       # animated pulse, composited per frame
+            kw_ = int(round(kh * 436 / 300 / 2) * 2)
+            bx -= kw_ + 14
+            KE_BOX[:] = [anim, bx, H - 196 - kh // 2, kw_, kh]
+        elif os.path.exists(still_png):
+            ke = Image.open(still_png).convert('RGBA')
+            ke = ke.resize((int(kh * ke.width / ke.height), kh), Image.LANCZOS)
+            bx -= ke.width + 14
+            bot.alpha_composite(ke, (bx, H - 196 - kh // 2))
     if sponsors:
-        sy, lh = H - 132, 40
-        lab_w = _spaced(d, (M, sy + 11), 'PRESENTED WITH', _f(fonts_dir, mono, 17), (255, 255, 255, 170), track=0.3)
+        sy, lh = H - 136, 46
+        lab_w = _spaced(d, (M, sy + 14), 'PRESENTED WITH', _f(fonts_dir, mono, 17), (255, 255, 255, 170), track=0.3)
         x = M + lab_w + 30
         for sp in sponsors:
-            lg = _logo_white(sp, lh)
+            lg = _logo_chip(sp, lh)
             if x + lg.width > W - M:
                 break
             bot.alpha_composite(lg, (int(x), sy))
-            x += lg.width + 34
+            x += lg.width + 16
     _spaced(d, (M, H - 76), SITE, _f(fonts_dir, mono, 18), (255, 255, 255, 140), track=0.3)
     _cross(d, M, H - 26)
     _cross(d, W - M, H - 26)
@@ -175,12 +213,15 @@ def build_layers(headline_lines, kicker, index, tagline, fonts_dir, bb_logo, rev
 
 def render_reel(clip, out, headline_lines, kicker, index=1, tagline='', ffmpeg='ffmpeg',
                 fonts_dir='.', bb_logo=None, start=0.0, duration=10.0, scale=1.0, t0=0.0,
-                reveal=None, reveal_at=6.4, reveal_label='', sponsors=None):
+                reveal=None, reveal_at=6.4, reveal_label='', sponsors=None, static_logo=False):
     """scale<1 renders smaller (e.g. 2/3 -> 720x1280). t0 lets you render a later segment."""
     global W, H
     line_masks, bounds, edge, (top_rgb, top_a), (bot_rgb, bot_a), (tag_rgb, tag_a), (rev_rgb, rev_a) = build_layers(
-        headline_lines, kicker, index, tagline, fonts_dir, bb_logo, reveal_label, sponsors)
+        headline_lines, kicker, index, tagline, fonts_dir, bb_logo, reveal_label, sponsors, None, static_logo)
     W0, H0 = W, H
+    ke = list(KE_BOX)
+    if ke and scale != 1.0:
+        ke = [ke[0]] + [int(round(v * scale / 2) * 2) for v in ke[1:]]
     if scale != 1.0:
         W, H = int(round(W0 * scale / 2) * 2), int(round(H0 * scale / 2) * 2)
         rs = lambda a: np.asarray(Image.fromarray((np.clip(a, 0, 1) * 255).astype(np.uint8)).resize((W, H), Image.LANCZOS), dtype=np.float32) / 255.0
@@ -193,7 +234,7 @@ def render_reel(clip, out, headline_lines, kicker, index=1, tagline='', ffmpeg='
         rev_rgb = np.dstack([rs(rev_rgb[..., c]) for c in range(3)]); rev_a = rs(rev_a[..., 0])[..., None]
     try:
         return _render(clip, out, line_masks, bounds, edge, top_rgb, top_a, bot_rgb, bot_a,
-                       ffmpeg, start, duration, t0, tag_rgb, tag_a, rev_rgb, rev_a, reveal, reveal_at)
+                       ffmpeg, start, duration, t0, tag_rgb, tag_a, rev_rgb, rev_a, reveal, reveal_at, ke)
     finally:
         W, H = W0, H0
 
@@ -206,7 +247,7 @@ def _decoder(ffmpeg, src, ss, dur):
 
 
 def _render(clip, out, line_masks, bounds, edge, top_rgb, top_a, bot_rgb, bot_a, ffmpeg, start, duration, t0,
-            tag_rgb, tag_a, rev_rgb, rev_a, reveal=None, reveal_at=6.4):
+            tag_rgb, tag_a, rev_rgb, rev_a, reveal=None, reveal_at=6.4, ke=None):
     n = int(duration * FPS)
     BLACK_IN, BLACK_OUT = 0.28, 0.55          # shutter: stencil -> ink -> clean plate
     rdec = _decoder(ffmpeg, reveal, 0, max(0.5, t0 + duration - reveal_at + 0.5)) if reveal else None
@@ -219,6 +260,27 @@ def _render(clip, out, line_masks, bounds, edge, top_rgb, top_a, bot_rgb, bot_a,
             a = max(a, 0.86 * ((y - 0.70 * H) / (0.30 * H)) ** 1.15)
         shade[y, 0, 0] = 1 - a
     rlast = None
+    kdec = None
+    if ke:
+        k_src, kx, ky, kw_, kh_ = ke
+        kdec = subprocess.Popen([ffmpeg, '-loglevel', 'error', '-stream_loop', '-1', '-i', k_src, '-t', str(t0 + duration + 1),
+                                 '-vf', 'scale=%d:%d:flags=lanczos,fps=%d' % (kw_, kh_, FPS),
+                                 '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], stdout=subprocess.PIPE)
+        klast = [None]
+
+    def put_logo(img, amt):
+        if kdec is None or amt <= 0:
+            return img
+        rr = kdec.stdout.read(kw_ * kh_ * 3)
+        if len(rr) == kw_ * kh_ * 3:
+            klast[0] = np.frombuffer(rr, np.uint8).reshape(kh_, kw_, 3).astype(np.float32) / 255.0
+        if klast[0] is None:
+            return img
+        lg = klast[0]
+        a = np.clip((lg.max(axis=2, keepdims=True) - 0.06) / 0.14, 0, 1) * amt
+        reg = img[ky:ky + kh_, kx:kx + kw_]
+        img[ky:ky + kh_, kx:kx + kw_] = reg * (1 - a) + lg * a
+        return img
 
     dec = subprocess.Popen(
         [ffmpeg, '-loglevel', 'error', '-stream_loop', '-1', '-ss', str(start + t0), '-i', clip,
@@ -289,6 +351,7 @@ def _render(clip, out, line_masks, bounds, edge, top_rgb, top_a, bot_rgb, bot_a,
                 img = ink * (1 - k_) + img * k_
                 img = img * (1 - top_a) + top_rgb
                 img = img * (1 - bot_a) + bot_rgb
+                img = put_logo(np.ascontiguousarray(img), 1.0)
                 ka = _ease((t - reveal_at - 0.35) / 0.6)
                 if ka > 0:
                     img = img * (1 - rev_a * ka) + rev_rgb * ka
@@ -300,12 +363,18 @@ def _render(clip, out, line_masks, bounds, edge, top_rgb, top_a, bot_rgb, bot_a,
         a2 = _ease((t - 1.5) / 0.7)
         if a2 > 0:
             img = img * (1 - bot_a * a2) + bot_rgb * a2
+        if a2 > 0:
+            img = put_logo(np.ascontiguousarray(img), a2)
+        elif kdec is not None:
+            kdec.stdout.read(kw_ * kh_ * 3)          # keep the pulse in sync
         enc.stdin.write((np.clip(img, 0, 1) * 255).astype(np.uint8).tobytes())
     enc.stdin.close()
     enc.wait()
     dec.kill()
     if rdec:
         rdec.kill()
+    if kdec:
+        kdec.kill()
     return out
 
 
