@@ -43,12 +43,31 @@ def _cross(d, cx, cy, r=10, fill=(255, 255, 255, 150)):
     d.line([(cx, cy - r), (cx, cy + r)], fill=fill, width=2)
 
 
+def _logo_white(path, height):
+    """Sponsor logo as a clean white mark on transparency (handles light or dark logo backgrounds)."""
+    im = Image.open(path).convert('RGB')
+    a = np.asarray(im, dtype=np.float32) / 255.0
+    nonwhite = (a.min(axis=2) < 0.92)
+    ys, xs = np.where(nonwhite)
+    a = a[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
+    corner = a[:4, :4].mean()
+    if corner < 0.35:                                   # logo printed on a dark box: keep the light ink
+        alpha = np.clip((a.max(axis=2) - 0.25) / 0.6, 0, 1)
+    else:                                               # logo on white: anything away from white is ink
+        alpha = np.clip((1 - a.min(axis=2) - 0.08) / 0.6, 0, 1)
+    rows = np.where(alpha.max(axis=1) > 0.2)[0]; cols = np.where(alpha.max(axis=0) > 0.2)[0]
+    alpha = alpha[rows.min():rows.max() + 1, cols.min():cols.max() + 1]
+    mark = Image.new('RGBA', (alpha.shape[1], alpha.shape[0]), (255, 255, 255, 0))
+    mark.putalpha(Image.fromarray((alpha * 235).astype(np.uint8)))
+    return mark.resize((max(1, int(mark.width * height / mark.height)), height), Image.LANCZOS)
+
+
 def _ease(t):
     t = min(max(t, 0.0), 1.0)
     return 1 - (1 - t) ** 3
 
 
-def build_layers(headline_lines, kicker, index, tagline, fonts_dir, bb_logo):
+def build_layers(headline_lines, kicker, index, tagline, fonts_dir, bb_logo, reveal_label='', sponsors=None, ke_logo=None):
     big = 'BigShoulders-Bold.ttf'
     cut = 'Anton-Regular.ttf'
     mono = 'DMMono-Regular.ttf'
@@ -63,13 +82,18 @@ def build_layers(headline_lines, kicker, index, tagline, fonts_dir, bb_logo):
         if max(tmp.textlength(l, font=f) for l in lines) <= measure:
             break
         size -= 4
-    hf = _f(fonts_dir, cut, size)
-    probe = ImageDraw.Draw(Image.new('L', (8, 8))).textbbox((0, 0), 'H', font=hf)
-    cap_top, cap = probe[1], probe[3] - probe[1]
-    gap = int(cap * 0.09)
-    lead = cap + gap
-    block_h = lead * (len(lines) - 1) + cap
-    top_zone, bot_zone = 300, H - 390
+    top_zone, bot_zone = 300, H - 410
+    avail = bot_zone - top_zone - (70 if tagline else 0)
+    while True:                      # fit width AND height of the zone
+        hf = _f(fonts_dir, cut, size)
+        probe = ImageDraw.Draw(Image.new('L', (8, 8))).textbbox((0, 0), 'H', font=hf)
+        cap_top, cap = probe[1], probe[3] - probe[1]
+        gap = int(cap * 0.09)
+        lead = cap + gap
+        block_h = lead * (len(lines) - 1) + cap
+        if block_h <= avail or size <= 100:
+            break
+        size -= 4
     y0 = top_zone + (bot_zone - top_zone - block_h) // 2
 
     line_masks = []
@@ -103,36 +127,59 @@ def build_layers(headline_lines, kicker, index, tagline, fonts_dir, bb_logo):
     d.line([(M, 140), (W - M, 140)], fill=(255, 255, 255, 60), width=1)
     _spaced(d, (M, 160), '4X4 MUSIC FESTIVAL', m22, (255, 255, 255, 200), track=0.28)
     _spaced(d, (W - M, 160), kicker.upper(), m22, CYAN + (255,), track=0.28, anchor_right=True)
+    tag = Image.new('RGBA', (W, H), (0, 0, 0, 0))
     if tagline:
-        ty = min(y0 + block_h + 56, H - 340)
-        _spaced(d, (M, ty), tagline.upper(), m20, (255, 255, 255, 190), track=0.24)
+        ty = min(y0 + block_h + 56, H - 360)
+        _spaced(ImageDraw.Draw(tag), (M, ty), tagline.upper(), m20, (255, 255, 255, 190), track=0.24)
+    rev = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+    if reveal_label:
+        _spaced(ImageDraw.Draw(rev), (M, H - 352), reveal_label.upper(), m22, CYAN + (255,), track=0.3)
 
     bot = Image.new('RGBA', (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(bot)
-    d.line([(M, H - 280), (W - M, H - 280)], fill=(255, 255, 255, 60), width=1)
-    _spaced(d, (M, H - 256), VENUE, m22, (255, 255, 255, 230), track=0.22)
-    _spaced(d, (M, H - 218), DATE, _f(fonts_dir, big, 92), GOLD + (255,), track=0.02)
+    d.line([(M, H - 300), (W - M, H - 300)], fill=(255, 255, 255, 60), width=1)
+    _spaced(d, (M, H - 276), VENUE, m22, (255, 255, 255, 230), track=0.22)
+    _spaced(d, (M, H - 238), DATE, _f(fonts_dir, big, 84), GOLD + (255,), track=0.02)
+    # Beyond Blue badge, always paired with the Kraken Expeditions badge (Kraken holds the Beyond Blue agreement)
+    bh, bx = 72, W - M
     if bb_logo and os.path.exists(bb_logo):
         bb = Image.open(bb_logo).convert('RGBA')
-        bw = 210
-        bb = bb.resize((bw, int(bw * bb.height / bb.width)), Image.LANCZOS)
-        bot.alpha_composite(bb, (W - M - bw, H - 220))
-    _spaced(d, (M, H - 90), SITE, m20, (255, 255, 255, 150), track=0.3)
-    _cross(d, M, H - 54)
-    _cross(d, W - M, H - 54)
+        bb = bb.resize((int(bh * bb.width / bb.height), bh), Image.LANCZOS)
+        bx -= bb.width
+        bot.alpha_composite(bb, (bx, H - 232))
+        ke_path = ke_logo or os.path.join(os.path.dirname(bb_logo), 'kraken-expeditions-logo.jpg')
+        if os.path.exists(ke_path):
+            ke = Image.open(ke_path).convert('RGBA')
+            ke = ke.resize((int(bh * ke.width / ke.height), bh), Image.LANCZOS)
+            bx -= ke.width + 12
+            bot.alpha_composite(ke, (bx, H - 232))
+    if sponsors:
+        sy, lh = H - 132, 40
+        lab_w = _spaced(d, (M, sy + 11), 'PRESENTED WITH', _f(fonts_dir, mono, 17), (255, 255, 255, 170), track=0.3)
+        x = M + lab_w + 30
+        for sp in sponsors:
+            lg = _logo_white(sp, lh)
+            if x + lg.width > W - M:
+                break
+            bot.alpha_composite(lg, (int(x), sy))
+            x += lg.width + 34
+    _spaced(d, (M, H - 76), SITE, _f(fonts_dir, mono, 18), (255, 255, 255, 140), track=0.3)
+    _cross(d, M, H - 26)
+    _cross(d, W - M, H - 26)
 
     def prem(img):
         a = np.asarray(img, dtype=np.float32) / 255.0
         return a[..., :3] * a[..., 3:4], a[..., 3:4]
-    return line_masks, bounds, edge, prem(top), prem(bot)
+    return line_masks, bounds, edge, prem(top), prem(bot), prem(tag), prem(rev)
 
 
 def render_reel(clip, out, headline_lines, kicker, index=1, tagline='', ffmpeg='ffmpeg',
-                fonts_dir='.', bb_logo=None, start=0.0, duration=10.0, scale=1.0, t0=0.0):
+                fonts_dir='.', bb_logo=None, start=0.0, duration=10.0, scale=1.0, t0=0.0,
+                reveal=None, reveal_at=6.4, reveal_label='', sponsors=None):
     """scale<1 renders smaller (e.g. 2/3 -> 720x1280). t0 lets you render a later segment."""
     global W, H
-    line_masks, bounds, edge, (top_rgb, top_a), (bot_rgb, bot_a) = build_layers(
-        headline_lines, kicker, index, tagline, fonts_dir, bb_logo)
+    line_masks, bounds, edge, (top_rgb, top_a), (bot_rgb, bot_a), (tag_rgb, tag_a), (rev_rgb, rev_a) = build_layers(
+        headline_lines, kicker, index, tagline, fonts_dir, bb_logo, reveal_label, sponsors)
     W0, H0 = W, H
     if scale != 1.0:
         W, H = int(round(W0 * scale / 2) * 2), int(round(H0 * scale / 2) * 2)
@@ -142,15 +189,36 @@ def render_reel(clip, out, headline_lines, kicker, index=1, tagline='', ffmpeg='
         edge = rs(edge)
         top_rgb = np.dstack([rs(top_rgb[..., c]) for c in range(3)]); top_a = rs(top_a[..., 0])[..., None]
         bot_rgb = np.dstack([rs(bot_rgb[..., c]) for c in range(3)]); bot_a = rs(bot_a[..., 0])[..., None]
+        tag_rgb = np.dstack([rs(tag_rgb[..., c]) for c in range(3)]); tag_a = rs(tag_a[..., 0])[..., None]
+        rev_rgb = np.dstack([rs(rev_rgb[..., c]) for c in range(3)]); rev_a = rs(rev_a[..., 0])[..., None]
     try:
         return _render(clip, out, line_masks, bounds, edge, top_rgb, top_a, bot_rgb, bot_a,
-                       ffmpeg, start, duration, t0)
+                       ffmpeg, start, duration, t0, tag_rgb, tag_a, rev_rgb, rev_a, reveal, reveal_at)
     finally:
         W, H = W0, H0
 
 
-def _render(clip, out, line_masks, bounds, edge, top_rgb, top_a, bot_rgb, bot_a, ffmpeg, start, duration, t0):
+def _decoder(ffmpeg, src, ss, dur):
+    return subprocess.Popen(
+        [ffmpeg, '-loglevel', 'error', '-stream_loop', '-1', '-ss', str(ss), '-i', src, '-t', str(dur), '-vf',
+         'scale=%d:%d:force_original_aspect_ratio=increase:flags=lanczos,crop=%d:%d,fps=%d' % (W, H, W, H, FPS),
+         '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], stdout=subprocess.PIPE)
+
+
+def _render(clip, out, line_masks, bounds, edge, top_rgb, top_a, bot_rgb, bot_a, ffmpeg, start, duration, t0,
+            tag_rgb, tag_a, rev_rgb, rev_a, reveal=None, reveal_at=6.4):
     n = int(duration * FPS)
+    BLACK_IN, BLACK_OUT = 0.28, 0.55          # shutter: stencil -> ink -> clean plate
+    rdec = _decoder(ffmpeg, reveal, 0, max(0.5, t0 + duration - reveal_at + 0.5)) if reveal else None
+    shade = np.ones((H, 1, 1), np.float32)     # top/bottom ink falloff so labels sit on the clean plate
+    for y in range(H):
+        a = 0.0
+        if y < 0.20 * H:
+            a = 0.80 * (1 - y / (0.20 * H)) ** 0.9
+        if y > 0.70 * H:
+            a = max(a, 0.86 * ((y - 0.70 * H) / (0.30 * H)) ** 1.15)
+        shade[y, 0, 0] = 1 - a
+    rlast = None
 
     dec = subprocess.Popen(
         [ffmpeg, '-loglevel', 'error', '-stream_loop', '-1', '-ss', str(start + t0), '-i', clip,
@@ -206,8 +274,29 @@ def _render(clip, out, line_masks, bounds, edge, top_rgb, top_a, bot_rgb, bot_a,
         img = img * (1 - e * 0.45) + cyan * e * 0.45
 
         a1 = _ease((t - 1.0) / 0.7)
+        if rdec is not None and t >= reveal_at - BLACK_IN:
+            if t < reveal_at:                       # close the shutter on the stencil
+                k_ = (t - (reveal_at - BLACK_IN)) / BLACK_IN
+                img = img * (1 - _ease(k_)) + ink * _ease(k_)
+            else:                                   # open on the clean, full-colour plate
+                rr = rdec.stdout.read(W * H * 3)
+                if len(rr) == W * H * 3:
+                    plate_c = np.frombuffer(rr, np.uint8).reshape(H, W, 3).astype(np.float32) / 255.0
+                    plate_c = np.clip((plate_c - 0.5) * 1.06 + 0.5, 0, 1)
+                    rlast = plate_c * shade + ink * (1 - shade)
+                img = rlast
+                k_ = _ease((t - reveal_at) / BLACK_OUT)
+                img = ink * (1 - k_) + img * k_
+                img = img * (1 - top_a) + top_rgb
+                img = img * (1 - bot_a) + bot_rgb
+                ka = _ease((t - reveal_at - 0.35) / 0.6)
+                if ka > 0:
+                    img = img * (1 - rev_a * ka) + rev_rgb * ka
+                enc.stdin.write((np.clip(img, 0, 1) * 255).astype(np.uint8).tobytes())
+                continue
         if a1 > 0:
             img = img * (1 - top_a * a1) + top_rgb * a1
+            img = img * (1 - tag_a * a1) + tag_rgb * a1
         a2 = _ease((t - 1.5) / 0.7)
         if a2 > 0:
             img = img * (1 - bot_a * a2) + bot_rgb * a2
@@ -215,6 +304,8 @@ def _render(clip, out, line_masks, bounds, edge, top_rgb, top_a, bot_rgb, bot_a,
     enc.stdin.close()
     enc.wait()
     dec.kill()
+    if rdec:
+        rdec.kill()
     return out
 
 
