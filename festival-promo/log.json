@@ -1,1 +1,25 @@
-[]
+[
+  {
+    "date": "2026-11-15",
+    "theme": "venue-reveal",
+    "format": "reel",
+    "clip": "festival-montage.mp4 + main-stage-concept.mp4 reveal",
+    "headline_lines": [
+      "Venue",
+      "Locked.",
+      "Lardner",
+      "Park."
+    ],
+    "ig_first_line": "Venue locked. 🔒🐙",
+    "fb_first_line": "We've found our home 🐙 Release the Kraken 4x4 Music Festival lands at Lardner Park, Gippsland on 3–4 April 2027.",
+    "hashtags": [
+      "#ReleaseTheKraken2027",
+      "#4x4MusicFestival",
+      "#LardnerPark",
+      "#Gippsland",
+      "#KrakenExpeditions"
+    ],
+    "ig_media_id": "18038790173895787",
+    "fb_video_id": "1808043910477360"
+  }
+]
