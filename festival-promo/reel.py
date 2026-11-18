@@ -117,7 +117,8 @@ def build_layers(headline_lines, kicker, index, tagline, fonts_dir, bb_logo, rev
     FEAT_H = feature_size            # prominent partner logo block (label + logo) under the tagline
     has_feat = bool(feature_logo and os.path.exists(feature_logo))
     top_zone, bot_zone = 300, H - 410 - (FEAT_H + 40 if has_feat else 0)
-    TAG_H = 92 if pop else 70        # pop: bigger, bolder tagline on a dark strip
+    TAG_LINES = tagline.split('|') if (pop and tagline) else [tagline]
+    TAG_H = (92 + 62 * (len(TAG_LINES) - 1)) if pop else 70        # pop: bigger, bolder tagline on a dark strip
     avail = bot_zone - top_zone - (TAG_H if tagline else 0)
     while True:                      # fit width AND height of the zone
         hf = _f(fonts_dir, cut, size)
@@ -169,16 +170,22 @@ def build_layers(headline_lines, kicker, index, tagline, fonts_dir, bb_logo, rev
     if tagline:
         ty = min(y0 + block_h + 56, H - 360)
         if pop:
-            tf = _f(fonts_dir, big, 50)
             dt0 = ImageDraw.Draw(tag)
-            tw = _spaced(ImageDraw.Draw(Image.new('RGBA', (8, 8))), (0, 0), tagline.upper(), tf, (0, 0, 0, 0), track=0.04)
+            meas = ImageDraw.Draw(Image.new('RGBA', (8, 8)))
+            for tsz in range(52, 30, -2):           # shrink to fit the measure
+                tf = _f(fonts_dir, big, tsz)
+                tws = [_spaced(meas, (0, 0), ln.strip().upper(), tf, (0, 0, 0, 0), track=0.04) for ln in TAG_LINES]
+                if max(tws) <= W - 2 * M:
+                    break
             tb = dt0.textbbox((0, 0), 'H', font=tf)
-            dt0.rounded_rectangle([M - 16, ty - 10, M + tw + 16, ty + (tb[3] - tb[1]) + tb[1] + 14], radius=8, fill=(0, 0, 0, 175))
-            _spaced(dt0, (M, ty), tagline.upper(), tf, GOLD + (255,), track=0.04)
+            for i_, (ln, tw) in enumerate(zip(TAG_LINES, tws)):
+                yy = ty + i_ * 62
+                dt0.rounded_rectangle([M - 16, yy - 10, M + tw + 16, yy + tb[3] + 12], radius=8, fill=(0, 0, 0, 175))
+                _spaced(dt0, (M, yy), ln.strip().upper(), tf, GOLD + (255,), track=0.04)
         else:
             _spaced(ImageDraw.Draw(tag), (M, ty), tagline.upper(), m20, (255, 255, 255, 190), track=0.24)
     if has_feat:
-        fy = (min(y0 + block_h + 56, H - 360) + (84 if pop else 52)) if tagline else (y0 + block_h + 56)
+        fy = (min(y0 + block_h + 56, H - 360) + ((84 + 62 * (len(TAG_LINES) - 1)) if pop else 52)) if tagline else (y0 + block_h + 56)
         fy = min(fy, H - 330 - FEAT_H)
         dt = ImageDraw.Draw(tag)
         if feature_label:
