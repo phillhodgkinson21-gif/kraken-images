@@ -98,7 +98,7 @@ KE_BOX = []
 
 
 def build_layers(headline_lines, kicker, index, tagline, fonts_dir, bb_logo, reveal_label='', sponsors=None, ke_logo=None, static_logo=False,
-                 feature_logo=None, feature_label='', feature_size=190):
+                 feature_logo=None, feature_label='', feature_size=190, pop=False):
     KE_BOX[:] = []
     big = 'BigShoulders-Bold.ttf'
     cut = 'Anton-Regular.ttf'
@@ -117,7 +117,8 @@ def build_layers(headline_lines, kicker, index, tagline, fonts_dir, bb_logo, rev
     FEAT_H = feature_size            # prominent partner logo block (label + logo) under the tagline
     has_feat = bool(feature_logo and os.path.exists(feature_logo))
     top_zone, bot_zone = 300, H - 410 - (FEAT_H + 40 if has_feat else 0)
-    avail = bot_zone - top_zone - (70 if tagline else 0)
+    TAG_H = 92 if pop else 70        # pop: bigger, bolder tagline on a dark strip
+    avail = bot_zone - top_zone - (TAG_H if tagline else 0)
     while True:                      # fit width AND height of the zone
         hf = _f(fonts_dir, cut, size)
         probe = ImageDraw.Draw(Image.new('L', (8, 8))).textbbox((0, 0), 'H', font=hf)
@@ -160,17 +161,35 @@ def build_layers(headline_lines, kicker, index, tagline, fonts_dir, bb_logo, rev
     _spaced(d, (W - M - 28, 82), 'N°%02d' % index, m26, (255, 255, 255, 170), track=0.22, anchor_right=True)
     d.line([(M, 140), (W - M, 140)], fill=(255, 255, 255, 60), width=1)
     _spaced(d, (M, 160), '4X4 MUSIC FESTIVAL', m22, (255, 255, 255, 200), track=0.28)
-    _spaced(d, (W - M, 160), kicker.upper(), m22, CYAN + (255,), track=0.28, anchor_right=True)
+    if pop:
+        _spaced(d, (W - M, 150), kicker.upper(), _f(fonts_dir, big, 40), CYAN + (255,), track=0.06, anchor_right=True)
+    else:
+        _spaced(d, (W - M, 160), kicker.upper(), m22, CYAN + (255,), track=0.28, anchor_right=True)
     tag = Image.new('RGBA', (W, H), (0, 0, 0, 0))
     if tagline:
         ty = min(y0 + block_h + 56, H - 360)
-        _spaced(ImageDraw.Draw(tag), (M, ty), tagline.upper(), m20, (255, 255, 255, 190), track=0.24)
+        if pop:
+            tf = _f(fonts_dir, big, 50)
+            dt0 = ImageDraw.Draw(tag)
+            tw = _spaced(ImageDraw.Draw(Image.new('RGBA', (8, 8))), (0, 0), tagline.upper(), tf, (0, 0, 0, 0), track=0.04)
+            tb = dt0.textbbox((0, 0), 'H', font=tf)
+            dt0.rounded_rectangle([M - 16, ty - 10, M + tw + 16, ty + (tb[3] - tb[1]) + tb[1] + 14], radius=8, fill=(0, 0, 0, 175))
+            _spaced(dt0, (M, ty), tagline.upper(), tf, GOLD + (255,), track=0.04)
+        else:
+            _spaced(ImageDraw.Draw(tag), (M, ty), tagline.upper(), m20, (255, 255, 255, 190), track=0.24)
     if has_feat:
-        fy = (min(y0 + block_h + 56, H - 360) + 52) if tagline else (y0 + block_h + 56)
+        fy = (min(y0 + block_h + 56, H - 360) + (84 if pop else 52)) if tagline else (y0 + block_h + 56)
         fy = min(fy, H - 330 - FEAT_H)
         dt = ImageDraw.Draw(tag)
         if feature_label:
-            _spaced(dt, (M, fy), feature_label.upper(), m22, CYAN + (255,), track=0.28)
+            if pop:
+                lf = _f(fonts_dir, big, 38)
+                lw = _spaced(ImageDraw.Draw(Image.new('RGBA', (8, 8))), (0, 0), feature_label.upper(), lf, (0, 0, 0, 0), track=0.05)
+                lb = dt.textbbox((0, 0), 'H', font=lf)
+                dt.rounded_rectangle([M - 14, fy - 4 + lb[1] - 8, M + lw + 14, fy - 4 + lb[3] + 8], radius=8, fill=(0, 0, 0, 175))
+                _spaced(dt, (M, fy - 4), feature_label.upper(), lf, CYAN + (255,), track=0.05)
+            else:
+                _spaced(dt, (M, fy), feature_label.upper(), m22, CYAN + (255,), track=0.28)
         fl = Image.open(feature_logo).convert('RGBA')
         lh_ = FEAT_H - (40 if feature_label else 0)
         fw_ = int(lh_ * fl.width / fl.height)
@@ -231,12 +250,12 @@ def build_layers(headline_lines, kicker, index, tagline, fonts_dir, bb_logo, rev
 def render_reel(clip, out, headline_lines, kicker, index=1, tagline='', ffmpeg='ffmpeg',
                 fonts_dir='.', bb_logo=None, start=0.0, duration=10.0, scale=1.0, t0=0.0,
                 reveal=None, reveal_at=6.4, reveal_label='', sponsors=None, static_logo=False,
-                feature_logo=None, feature_label='', feature_size=190):
+                feature_logo=None, feature_label='', feature_size=190, pop=False):
     """scale<1 renders smaller (e.g. 2/3 -> 720x1280). t0 lets you render a later segment."""
     global W, H
     line_masks, bounds, edge, (top_rgb, top_a), (bot_rgb, bot_a), (tag_rgb, tag_a), (rev_rgb, rev_a) = build_layers(
         headline_lines, kicker, index, tagline, fonts_dir, bb_logo, reveal_label, sponsors, None, static_logo,
-        feature_logo, feature_label, feature_size)
+        feature_logo, feature_label, feature_size, pop)
     W0, H0 = W, H
     ke = list(KE_BOX)
     if ke and scale != 1.0:
