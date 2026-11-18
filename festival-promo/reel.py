@@ -98,7 +98,7 @@ KE_BOX = []
 
 
 def build_layers(headline_lines, kicker, index, tagline, fonts_dir, bb_logo, reveal_label='', sponsors=None, ke_logo=None, static_logo=False,
-                 feature_logo=None, feature_label=''):
+                 feature_logo=None, feature_label='', feature_size=190):
     KE_BOX[:] = []
     big = 'BigShoulders-Bold.ttf'
     cut = 'Anton-Regular.ttf'
@@ -114,7 +114,7 @@ def build_layers(headline_lines, kicker, index, tagline, fonts_dir, bb_logo, rev
         if max(tmp.textlength(l, font=f) for l in lines) <= measure:
             break
         size -= 4
-    FEAT_H = 190                     # prominent partner logo block (label + logo) under the tagline
+    FEAT_H = feature_size            # prominent partner logo block (label + logo) under the tagline
     has_feat = bool(feature_logo and os.path.exists(feature_logo))
     top_zone, bot_zone = 300, H - 410 - (FEAT_H + 40 if has_feat else 0)
     avail = bot_zone - top_zone - (70 if tagline else 0)
@@ -231,12 +231,12 @@ def build_layers(headline_lines, kicker, index, tagline, fonts_dir, bb_logo, rev
 def render_reel(clip, out, headline_lines, kicker, index=1, tagline='', ffmpeg='ffmpeg',
                 fonts_dir='.', bb_logo=None, start=0.0, duration=10.0, scale=1.0, t0=0.0,
                 reveal=None, reveal_at=6.4, reveal_label='', sponsors=None, static_logo=False,
-                feature_logo=None, feature_label=''):
+                feature_logo=None, feature_label='', feature_size=190):
     """scale<1 renders smaller (e.g. 2/3 -> 720x1280). t0 lets you render a later segment."""
     global W, H
     line_masks, bounds, edge, (top_rgb, top_a), (bot_rgb, bot_a), (tag_rgb, tag_a), (rev_rgb, rev_a) = build_layers(
         headline_lines, kicker, index, tagline, fonts_dir, bb_logo, reveal_label, sponsors, None, static_logo,
-        feature_logo, feature_label)
+        feature_logo, feature_label, feature_size)
     W0, H0 = W, H
     ke = list(KE_BOX)
     if ke and scale != 1.0:

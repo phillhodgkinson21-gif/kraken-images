@@ -1,0 +1,23 @@
+{
+  "_about": "Link comments for advert clips and EOI posts. Phill posts clips by hand (so he can add Instagram/Facebook music); the hourly reply runs read this file and add the matching comment to any of our posts from the last 72 hours that doesn't already have a krakenexpeditions.com.au comment from us. Match a post by its caption starting with first_line (ignore emoji/whitespace differences). Instagram allows ONE URL per comment, so each ig_comments entry is a separate comment. If no entry matches, use the rules.",
+  "rules": [
+    {"if_caption_mentions": "FMX sponsor / sponsorship of the FMX comp", "ig_comments": ["🤝 FMX sponsorship EOIs: krakenexpeditions.com.au/fmx-sponsor"], "fb_comment": "FMX comp sponsorship EOIs 👇\nhttps://krakenexpeditions.com.au/fmx-sponsor"},
+    {"if_caption_mentions": "FMX comp / FMX riders / rider registrations", "ig_comments": ["🏍️ Rider registrations of interest: krakenexpeditions.com.au/fmx (competitors by invitation only)"], "fb_comment": "FMX rider registrations of interest 👇\nhttps://krakenexpeditions.com.au/fmx\nAll competitors are by invitation only."},
+    {"if_caption_mentions": "4x4 competitors / 4x4 comps registrations", "ig_comments": ["🚙 4x4 competitor registrations of interest: krakenexpeditions.com.au/get-involved#4x4 (by invitation only)"], "fb_comment": "4x4 competitor registrations of interest 👇\nhttps://krakenexpeditions.com.au/get-involved#4x4\nAll competitors are by invitation only."},
+    {"if_caption_mentions": "food vendors / vendor EOIs", "ig_comments": ["🍔 Food vendor EOIs: krakenexpeditions.com.au/vendors (businesses within 50 km of Lardner Park)", "🛠️ 4x4 & industry vendor EOIs: krakenexpeditions.com.au/trade"], "fb_comment": "Vendor EOIs 👇\n🍔 Food vendors: https://krakenexpeditions.com.au/vendors\n🛠️ 4x4 & industry vendors: https://krakenexpeditions.com.au/trade\nCurrently open to businesses within 50 km of Lardner Park."},
+    {"if_caption_mentions": "industry / trade vendors only", "ig_comments": ["🛠️ 4x4 & industry vendor EOIs: krakenexpeditions.com.au/trade"], "fb_comment": "4x4 & industry vendor EOIs 👇\nhttps://krakenexpeditions.com.au/trade"},
+    {"if_caption_mentions": "festival sponsorship / partnerships", "ig_comments": ["🤝 Sponsorship enquiries: krakenexpeditions.com.au/sponsor"], "fb_comment": "Sponsorship enquiries 👇\nhttps://krakenexpeditions.com.au/sponsor"},
+    {"if_caption_mentions": "anything else about Release the Kraken (tickets, early bird, line-up, camping, Beyond Blue, share posts)", "ig_comments": ["🎟️ Early-bird waitlist: krakenexpeditions.com.au/waitlist"], "fb_comment": "Join the early-bird waitlist 👇\nhttps://krakenexpeditions.com.au/waitlist"}
+  ],
+  "posts": [
+    {"clip": "festival-promo/posts/2026-11-19-fmx-eoi-reel.mp4", "first_line": "$50K FMX comp",
+     "ig_comments": ["🏍️ Rider registrations of interest: krakenexpeditions.com.au/fmx (competitors by invitation only)", "🤝 FMX sponsorship EOIs: krakenexpeditions.com.au/fmx-sponsor"],
+     "fb_comment": "FMX comp links 👇\n🏍️ Rider registrations of interest: https://krakenexpeditions.com.au/fmx (all competitors by invitation only)\n🤝 FMX sponsorship EOIs: https://krakenexpeditions.com.au/fmx-sponsor"},
+    {"clip": "festival-promo/posts/2026-11-18-share-reel.mp4", "first_line": "Help us raise $1 million for Beyond Blue",
+     "ig_comments": ["🎟️ Early-bird waitlist: krakenexpeditions.com.au/waitlist"],
+     "fb_comment": "Join the early-bird waitlist 👇\nhttps://krakenexpeditions.com.au/waitlist"},
+    {"clip": "festival-promo/posts/2026-11-20-share-post.jpg", "first_line": "Every share gets us closer",
+     "ig_comments": ["🎟️ Early-bird waitlist: krakenexpeditions.com.au/waitlist"],
+     "fb_comment": "Join the early-bird waitlist 👇\nhttps://krakenexpeditions.com.au/waitlist"}
+  ]
+}
